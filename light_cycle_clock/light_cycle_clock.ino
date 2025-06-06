@@ -32,8 +32,7 @@ void loop(){
     digitalClockDisplay();  
     time_t currentTime = now();
     int currentHour = hour(currentTime);
-    if (currentHour >= 21 || currentHour < 7) {
-      // Turn the LED off
+    if (currentHour >= 22 || currentHour < 8) {
       digitalWrite(lightPin, LOW);
       Serial.println("LED OFF: Night time (10:00 PM - 8:00 AM)");
     } else {
