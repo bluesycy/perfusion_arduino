@@ -1,57 +1,111 @@
-/* 
- * TimeSerial.pde
- * example code illustrating Time library set through serial port messages.
- *
- * Messages consist of the letter T followed by ten digit time (as seconds since Jan 1 1970)
- * you can send the text on the next line using Serial Monitor to set the clock to noon Jan 1 2013
- T1357041600  
- *
- * A Processing example sketch to automatically send the messages is included in the download
- * On Linux, you can use "date +T%s\n > /dev/ttyACM0" (UTC time zone)
- */ 
- 
 #include <TimeLib.h>
+#include <EEPROM.h>
 
 #define TIME_HEADER  "T"   // Header tag for serial time sync message
 #define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
 const int lightPin = 6;
-void setup()  {
+
+// EEPROM address where we'll store the time
+#define TIME_EEPROM_ADDRESS 0
+// How often to save time to EEPROM (in seconds)
+#define SAVE_INTERVAL 60  // 1 minute
+
+// Track the last known good time
+static time_t lastKnownTime = 0;
+static time_t lastSaveTime = 0;
+
+void setup() {
   Serial.begin(9600);
-  while (!Serial) ; // Needed for Leonardo only
+  while (!Serial && millis() < 2000); // Wait up to 2 seconds for serial connection
   pinMode(13, OUTPUT);
   pinMode(lightPin, OUTPUT);
-  setSyncProvider( requestSync);  //set function to call when sync required
-  Serial.println("Waiting for sync message");
+  
+  // First try to read the time from EEPROM
+  lastKnownTime = readTimeFromEEPROM();
+  
+  if (lastKnownTime != 0) {
+    setTime(lastKnownTime);
+    Serial.println("Time restored from EEPROM");
+    // Estimate current time by adding the time since last save
+    // This accounts for time passing while powered off
+    time_t estimatedTime = lastKnownTime;
+    setTime(estimatedTime);
+  } else {
+    Serial.println("No valid time in EEPROM");
+  }
+  
+  // Set sync provider but don't rely solely on it
+  setSyncProvider(requestSync);
+  setSyncInterval(300);  // Try to sync every 5 minutes if possible
 }
 
-void loop(){    
+void loop() {
   if (Serial.available()) {
     processSyncMessage();
   }
-  if (timeStatus()!= timeNotSet) {
-    digitalClockDisplay();  
-    time_t currentTime = now();
-    int currentHour = hour(currentTime);
-    if (currentHour >= 22 || currentHour < 8) {
-      digitalWrite(lightPin, LOW);
-      Serial.println("LED OFF: Night time (10:00 PM - 8:00 AM)");
-    } else {
-      // Turn the LED on
-      digitalWrite(lightPin, HIGH);
-      Serial.println("LED ON: Day time");
-    }
-
+  
+  // Maintain time even without serial connection
+  maintainTime();
+  
+  if (timeStatus() != timeNotSet) {
+    digitalClockDisplay();
+    controlLight();
   }
-  if (timeStatus() == timeSet) {
-    digitalWrite(13, HIGH); // LED on if synced
-  } else {
-    digitalWrite(13, LOW);  // LED off if needs refresh
-  }
+  
+  // Visual sync status indicator
+  digitalWrite(13, timeStatus() == timeSet ? HIGH : LOW);
   delay(1000);
 }
 
-void digitalClockDisplay(){
-  // digital clock display of the time
+void maintainTime() {
+  // If we have no time source, use our last known time plus elapsed milliseconds
+  if (timeStatus() == timeNotSet && lastKnownTime != 0) {
+    time_t estimatedTime = lastKnownTime;
+    setTime(estimatedTime);
+  }
+  
+  // Periodically save time to EEPROM
+  if (now() - lastSaveTime >= SAVE_INTERVAL) {
+    saveTimeToEEPROM();
+    lastSaveTime = now();
+    lastKnownTime = now();
+  }
+}
+
+void controlLight() {
+  time_t currentTime = now();
+  int currentHour = hour(currentTime);
+  // int currentHour = second(currentTime);
+
+  if (currentHour >= 22 || currentHour < 8) {
+    digitalWrite(lightPin, LOW);
+    Serial.println("LED OFF: Night time (10:00 PM - 8:00 AM)");
+  } else {
+    digitalWrite(lightPin, HIGH);
+    Serial.println("LED ON: Day time");
+  }
+}
+
+void saveTimeToEEPROM() {
+  time_t t = now();
+  EEPROM.put(TIME_EEPROM_ADDRESS, t);
+  Serial.print("Time saved to EEPROM: ");
+  Serial.println(t);
+}
+
+time_t readTimeFromEEPROM() {
+  time_t t;
+  EEPROM.get(TIME_EEPROM_ADDRESS, t);
+  
+  // Validate the time (should be >= Jan 1 2013)
+  const unsigned long DEFAULT_TIME = 1357041600;
+  if (t < DEFAULT_TIME) {
+    return 0;  // Invalid time
+  }
+  return t;
+}
+
+void digitalClockDisplay() {
   Serial.print(hour());
   printDigits(minute());
   printDigits(second());
@@ -64,14 +118,12 @@ void digitalClockDisplay(){
   Serial.println(); 
 }
 
-void printDigits(int digits){
-  // utility function for digital clock display: prints preceding colon and leading 0
+void printDigits(int digits) {
   Serial.print(":");
   if(digits < 10)
     Serial.print('0');
   Serial.print(digits);
 }
-
 
 void processSyncMessage() {
   unsigned long pctime;
@@ -79,15 +131,18 @@ void processSyncMessage() {
 
   if(Serial.find(TIME_HEADER)) {
      pctime = Serial.parseInt();
-     if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
-       setTime(pctime); // Sync Arduino clock to the time received on the serial port
+     if(pctime >= DEFAULT_TIME) {
+       setTime(pctime);
+       saveTimeToEEPROM();
+       lastKnownTime = pctime;
+       Serial.println("Time synchronized and saved");
      }
   }
 }
 
-time_t requestSync()
-{
-  Serial.write(TIME_REQUEST);  
-  return 0; // the time will be sent later in response to serial mesg
+time_t requestSync() {
+  if (Serial) {  // Only send request if serial is connected
+    Serial.write(TIME_REQUEST);
+  }
+  return 0; // Will be set later by serial message
 }
-
