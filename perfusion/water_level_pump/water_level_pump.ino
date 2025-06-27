@@ -43,7 +43,7 @@ void loop() {
 
   if (c1 < 1) {
     digitalWrite(pumpPin1, HIGH); // Output PWM signal
-    while (c1 < 1.3) {
+    while (c1 < 1.15) {
       sensorValue1 = analogRead(inputPin1); 
       v1 = sensorValue1 * (3.3 / 65535); // Assuming 3.3V reference
       c1 = sensorValue1/(1*(65535 - sensorValue1));

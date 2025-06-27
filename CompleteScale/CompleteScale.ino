@@ -27,7 +27,7 @@ NAU7802 myScale; // Create instance of the NAU7802 class
 bool settingsDetected = false; // Used to prompt the user to calibrate their scale
 
 // Create an array to average weights. This helps smooth out jitter.
-#define AVG_SIZE 8 // Increased average size for more stable readings
+#define AVG_SIZE 100 // Increased average size for more stable readings
 float avgWeights[AVG_SIZE];
 byte avgWeightSpot = 0;
 
