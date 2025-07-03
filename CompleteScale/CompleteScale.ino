@@ -28,8 +28,8 @@ bool settingsDetected = false; // Used to prompt the user to calibrate their sca
 
 // Create an array to average weights. This helps smooth out jitter.
 #define AVG_SIZE 100 // Increased average size for more stable readings
-float avgWeights[AVG_SIZE];
-byte avgWeightSpot = 0;
+// float avgWeights[AVG_SIZE];
+// byte avgWeightSpot = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -77,9 +77,9 @@ void loop() {
     int32_t currentReading = myScale.getReading(); // Raw ADC reading
     float currentWeight = myScale.getWeight();     // Calibrated weight
 
-    // Add current weight to the averaging array
-    avgWeights[avgWeightSpot++] = currentWeight;
-    if (avgWeightSpot == AVG_SIZE) avgWeightSpot = 0; // Wrap around
+    // // Add current weight to the averaging array
+    // avgWeights[avgWeightSpot++] = currentWeight;
+    // if (avgWeightSpot == AVG_SIZE) avgWeightSpot = 0; // Wrap around
 
     // Calculate the average weight
     float avgWeight = 0;
